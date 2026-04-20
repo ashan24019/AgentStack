@@ -1,12 +1,14 @@
 from langchain_openai import ChatOpenAI
 import os
 from dotenv import load_dotenv
+from langgraph.prebuilt import create_react_agent
 from pydantic import BaseModel, Field
 from prompts import *
 from states import *
 from langgraph.constants import END
 from langgraph.graph import StateGraph
 from langchain_core.globals import set_verbose, set_debug
+from tools import *
 
 load_dotenv()
 
@@ -42,15 +44,27 @@ def coder_agent(state: dict) -> dict:
     current_steps_idx = 0
     current_task = steps[current_steps_idx]
 
+    existing_content = read_file.run(current_task.filepath)
+
     user_prompt = (
         f"Task: {current_task.task_description}\n"
+        f"File: {current_task.filepath}\n"
+        f"Existing content:\n{existing_content}\n"
+        "Use write_file(path, content) to save your changes."
     )
 
     system_promp = coder_system_prompt()
-    response = llm.invoke(system_promp + user_prompt)
-    return {"code": response.content}
 
-    pass
+    coder_tools = [read_file, write_file, list_files, get_current_directory]
+    react_agent = create_react_agent(llm, coder_tools)
+    react_agent.invoke(
+        {"messages": [
+            {"role": "system", "content": system_promp},
+            {"role": "user", "content": user_prompt}
+        ]}
+    )
+
+    return {}
 
 
 graph = StateGraph(dict)
