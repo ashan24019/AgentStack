@@ -40,9 +40,14 @@ def architect_agent(state: dict) -> dict:
     return {"task_plan": response, "plan": plan}
 
 def coder_agent(state: dict) -> dict:
-    steps = state['task_plan'].implementation_steps
-    current_steps_idx = 0
-    current_task = steps[current_steps_idx]
+    coder_state = state.get("coder_state")
+    if coder_state is None:
+        coder_state = CoderState(task_plan=state["task_plan"], current_step_idx=0)
+
+    steps = coder_state.task_plan.implementation_steps
+    if coder_state.current_step_idx >= len(steps):
+        return {"coder_state": coder_state, "result": "DONE"}
+    current_task = steps[coder_state.current_step_idx]
 
     existing_content = read_file.run(current_task.filepath)
 
@@ -64,7 +69,9 @@ def coder_agent(state: dict) -> dict:
         ]}
     )
 
-    return {}
+    coder_state.current_step_idx += 1
+
+    return {"coder_state": coder_state}
 
 
 graph = StateGraph(dict)
@@ -82,6 +89,7 @@ if __name__ == "__main__":
 
     user_prompt = "Create a simple calculator web app"
 
-    result = agent.invoke({"user_prompt": user_prompt})
+    result = agent.invoke({"user_prompt": user_prompt}, 
+                          {"recursion_limit": 100})
 
     print(result)
